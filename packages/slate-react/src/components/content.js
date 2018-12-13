@@ -150,18 +150,34 @@ class Content extends React.Component {
     const native = window.getSelection()
     const { activeElement } = window.document
 
+    console.log("In updateSelection()");
+
     // COMPAT: In Firefox, there's a but where `getSelection` can return `null`.
     // https://bugzilla.mozilla.org/show_bug.cgi?id=827585 (2018/11/07)
     if (!native) {
+      console.log("No native selection.. returning");
       return
     }
 
     const { rangeCount, anchorNode } = native
     let updated = false
 
+    const debugOutput = {
+      isBlurred: selection.isBlurred,
+      isActive: activeElement === this.element,
+      isUnset: selection.isUnset,
+      rangeCount,
+      isAnchorInEditor: !!anchorNode && this.isInEditor(anchorNode),
+      isFocused: selection.isFocused,
+      isSet: selection.isSet,
+    }
+    console.log(debugOutput);
+
+
     // If the Slate selection is blurred, but the DOM's active element is still
     // the editor, we need to blur it.
     if (selection.isBlurred && activeElement === this.element) {
+      console.log("Blurring DOM editor element to match internal model being blurred");
       this.element.blur()
       updated = true
     }
@@ -169,6 +185,7 @@ class Content extends React.Component {
     // If the Slate selection is unset, but the DOM selection has a range
     // selected in the editor, we need to remove the range.
     if (selection.isUnset && rangeCount && this.isInEditor(anchorNode)) {
+      console.log("Selection unset, but DOM still selected so calling removeAllRanges()");
       removeAllRanges(native)
       updated = true
     }
@@ -176,6 +193,7 @@ class Content extends React.Component {
     // If the Slate selection is focused, but the DOM's active element is not
     // the editor, we need to focus it.
     if (selection.isFocused && activeElement !== this.element) {
+      console.log("Focusing DOM editor element to match selection");
       // KLM: need to restore the scroll position so container doesn't jump on focus.
       if (selectOnly) {
         const scrollContainer = this.element.closest('[data-scroll-container]')
@@ -196,6 +214,7 @@ class Content extends React.Component {
 
     // Otherwise, figure out which DOM nodes should be selected...
     if (selection.isFocused && selection.isSet) {
+      console.log("Figuring out which DOM nodes to select");
       const current = !!rangeCount && native.getRangeAt(0)
       const range = findDOMRange(selection, window)
 
@@ -225,6 +244,7 @@ class Content extends React.Component {
             endContainer == current.startContainer &&
             endOffset == current.startOffset)
         ) {
+          console.log("Current same as last range, returning...");
           return
         }
       }
@@ -233,6 +253,7 @@ class Content extends React.Component {
       updated = true
       this.tmp.isUpdatingSelection = true
       removeAllRanges(native)
+      console.log("Removing all ranges before adding in");
 
       // COMPAT: IE 11 does not support `setBaseAndExtent`. (2018/11/07)
       if (native.setBaseAndExtent) {
@@ -257,6 +278,8 @@ class Content extends React.Component {
         native.addRange(range)
       }
 
+      console.log("Finished adding selection, new scrolling to selection");
+
       // Scroll to the selection, in case it's out of view.
       // KLM: don't want jumpy scrolling in Reader.
       if (!selectOnly) {
@@ -269,6 +292,7 @@ class Content extends React.Component {
         // COMPAT: In Firefox, it's not enough to create a range, you also need
         // to focus the contenteditable element too. (2016/11/16)
         if (IS_FIREFOX && this.element) {
+          console.log("unfocusing element in timeout()...");
           this.element.focus()
         }
 
@@ -277,6 +301,7 @@ class Content extends React.Component {
     }
 
     if (updated) {
+      console.log("Updating selection");
       debug('updateSelection', { selection, native, activeElement })
     }
   }
@@ -354,6 +379,7 @@ class Content extends React.Component {
       this.tmp.isUpdatingSelection &&
       (handler == 'onSelect' || handler == 'onBlur' || handler == 'onFocus')
     ) {
+      console.warn("In onEvent() and handler is " + handler + " and updating selection so returning early");
       return
     }
 
@@ -371,6 +397,7 @@ class Content extends React.Component {
       const range = findRange(native, editor)
 
       if (range && range.equals(selection.toRange())) {
+        console.log("In onEvent and native range is that same, so syncing it");
         this.updateSelection()
         return
       }
@@ -410,6 +437,7 @@ class Content extends React.Component {
       handler == 'onSelect'
     ) {
       if (!this.isInEditor(event.target)) {
+        console.log("Skipping event " + handler + "because not in Editor");
         return
       }
     }
@@ -427,11 +455,20 @@ class Content extends React.Component {
    */
 
   onNativeSelectionChange = throttle(event => {
-    if (this.props.readOnly) return
+    if (this.props.readOnly) {
+      console.warn("readonly in native selection change!");
+      return
+    }
 
     const window = getWindow(event.target)
     const { activeElement } = window.document
-    if (activeElement !== this.element) return
+    if (activeElement !== this.element) {
+      console.warn("In native selection change and not active so returning");
+      console.log(activeElement);
+      return
+    } else {
+      console.log("native selection change");
+    }
 
     if (this.props.selectOnly) {
       const native = window.getSelection()
